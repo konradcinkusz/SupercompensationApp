@@ -1,0 +1,29 @@
+@inherits LayoutComponentBase
+
+<div class="app-container">
+    <header class="app-header">
+        <div class="header-content">
+            <h1>📈 Supercompensation Model</h1>
+            <p class="subtitle">Agile Sprint Hypercompensation Visualizer</p>
+        </div>
+        <nav class="header-nav">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="nav-icon">⚙️</span> Konfiguracja
+            </NavLink>
+            <NavLink class="nav-link" href="chart">
+                <span class="nav-icon">📊</span> Wykres
+            </NavLink>
+            <NavLink class="nav-link" href="data">
+                <span class="nav-icon">📋</span> Dane
+            </NavLink>
+        </nav>
+    </header>
+
+    <main class="app-main">
+        @Body
+    </main>
+
+    <footer class="app-footer">
+        <p>Feedback i hiperkompensacja — zarządzanie IT w 2026 · Konrad</p>
+    </footer>
+</div>

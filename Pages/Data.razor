@@ -1,0 +1,106 @@
+@page "/data"
+@inject NavigationManager Navigation
+
+<PageTitle>Dane — Supercompensation</PageTitle>
+
+<div class="data-page">
+    @if (TableData is null || TableData.Count == 0)
+    {
+        <div class="no-data">
+            <h2>Brak danych</h2>
+            <p>Najpierw skonfiguruj parametry i wygeneruj dane.</p>
+            <button class="btn-generate" @onclick="@(() => Navigation.NavigateTo("/"))">
+                ⚙️ Przejdź do konfiguracji
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="data-header">
+            <h2>📋 Dane tabelaryczne — @TableData.Count dni</h2>
+            <div class="filter-row">
+                <label>Filtruj sprint:</label>
+                <select @bind="SelectedSprint">
+                    <option value="0">Wszystkie</option>
+                    @for (int i = 1; i <= MaxSprint; i++)
+                    {
+                        <option value="@i">Sprint @i</option>
+                    }
+                </select>
+                <label>Filtruj fazę:</label>
+                <select @bind="SelectedPhase">
+                    <option value="">Wszystkie</option>
+                    <option value="Fatigue">Fatigue</option>
+                    <option value="Recovery">Recovery</option>
+                    <option value="Supercompensation">Supercompensation</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="data-table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Dzień</th>
+                        <th>Sprint</th>
+                        <th>Dzień w sprincie</th>
+                        <th>Faza</th>
+                        <th>Baseline</th>
+                        <th>Odchylenie</th>
+                        <th>Wydajność</th>
+                        <th>Δ od Baseline</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var point in FilteredData)
+                    {
+                        var delta = point.Performance - point.Baseline;
+                        var deltaClass = delta >= 0 ? "positive" : "negative";
+                        <tr class="phase-@point.Phase.ToLower()">
+                            <td>@point.Day</td>
+                            <td>@point.SprintNumber</td>
+                            <td>@point.DayInSprint</td>
+                            <td>
+                                <span class="phase-badge @point.Phase.ToLower()">
+                                    @point.Phase
+                                </span>
+                            </td>
+                            <td>@point.Baseline.ToString("F1")</td>
+                            <td class="@deltaClass">@point.Deviation.ToString("F1")</td>
+                            <td><strong>@point.Performance.ToString("F1")</strong></td>
+                            <td class="@deltaClass">
+                                @(delta >= 0 ? "+" : "")@delta.ToString("F1")
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private List<SprintDataPoint>? TableData => Index.LastTableData;
+    private int SelectedSprint { get; set; } = 0;
+    private string SelectedPhase { get; set; } = "";
+
+    private int MaxSprint => TableData?.Max(d => d.SprintNumber) ?? 0;
+
+    private IEnumerable<SprintDataPoint> FilteredData
+    {
+        get
+        {
+            if (TableData is null) return [];
+
+            var data = TableData.AsEnumerable();
+
+            if (SelectedSprint > 0)
+                data = data.Where(d => d.SprintNumber == SelectedSprint);
+
+            if (!string.IsNullOrEmpty(SelectedPhase))
+                data = data.Where(d => d.Phase == SelectedPhase);
+
+            return data;
+        }
+    }
+}

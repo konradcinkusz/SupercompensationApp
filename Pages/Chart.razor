@@ -1,0 +1,128 @@
+@page "/chart"
+@inject IJSRuntime JS
+@inject SupercompensationService SuperService
+@inject NavigationManager Navigation
+
+<PageTitle>Wykres — Supercompensation</PageTitle>
+
+<div class="chart-page">
+    @if (ChartData is null)
+    {
+        <div class="no-data">
+            <h2>Brak danych</h2>
+            <p>Najpierw skonfiguruj parametry i wygeneruj dane.</p>
+            <button class="btn-generate" @onclick="@(() => Navigation.NavigateTo("/"))">
+                ⚙️ Przejdź do konfiguracji
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="chart-controls">
+            <button class="btn-toggle @(ShowPhases ? "active" : "")" @onclick="TogglePhases">
+                🎨 Pokaż fazy
+            </button>
+            <button class="btn-toggle @(ShowBaseline ? "active" : "")" @onclick="ToggleBaseline">
+                ➖ Linia bazowa
+            </button>
+            <button class="btn-export" @onclick="ExportCsv">
+                💾 Eksport CSV
+            </button>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="supercompChart" width="900" height="400"></canvas>
+        </div>
+
+        <div class="summaries-grid">
+            @foreach (var summary in ChartData.Summaries)
+            {
+                <div class="summary-card sprint-@summary.SprintNumber">
+                    <h3>Sprint @summary.SprintNumber</h3>
+                    <div class="summary-stats">
+                        <div class="stat">
+                            <span class="stat-label">Baseline</span>
+                            <span class="stat-value">@summary.Baseline.ToString("F1")</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Peak</span>
+                            <span class="stat-value peak">@summary.PeakPerformance.ToString("F1")</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Min</span>
+                            <span class="stat-value min">@summary.MinPerformance.ToString("F1")</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Delivery Value</span>
+                            <span class="stat-value dv">@summary.DeliveryValue.ToString("F2")</span>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private ChartDataSet? ChartData => Index.LastChartData;
+    private bool ShowPhases = true;
+    private bool ShowBaseline = true;
+    private bool _chartRendered = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (ChartData is not null && !_chartRendered)
+        {
+            _chartRendered = true;
+            await RenderChart();
+        }
+    }
+
+    private async Task RenderChart()
+    {
+        if (ChartData is null) return;
+
+        var config = Index.Config;
+        var sprintBoundaries = new List<double>();
+        for (int i = 1; i < config.NumberOfSprints; i++)
+            sprintBoundaries.Add(i * config.SprintDuration);
+
+        await JS.InvokeVoidAsync("renderSupercompChart",
+            ChartData.Days.ToArray(),
+            ChartData.Performance.ToArray(),
+            ChartData.Baselines.ToArray(),
+            ChartData.Phases.ToArray(),
+            sprintBoundaries.ToArray(),
+            ShowPhases,
+            ShowBaseline,
+            config.SprintDuration
+        );
+    }
+
+    private async Task TogglePhases()
+    {
+        ShowPhases = !ShowPhases;
+        _chartRendered = false;
+        await RenderChart();
+    }
+
+    private async Task ToggleBaseline()
+    {
+        ShowBaseline = !ShowBaseline;
+        _chartRendered = false;
+        await RenderChart();
+    }
+
+    private async Task ExportCsv()
+    {
+        if (Index.LastTableData is null) return;
+
+        var csv = "Day,Sprint,DayInSprint,Phase,Baseline,Deviation,Performance\n";
+        foreach (var p in Index.LastTableData)
+        {
+            csv += $"{p.Day},{p.SprintNumber},{p.DayInSprint},{p.Phase},{p.Baseline},{p.Deviation},{p.Performance}\n";
+        }
+
+        await JS.InvokeVoidAsync("downloadCsv", csv, "supercompensation_data.csv");
+    }
+}
