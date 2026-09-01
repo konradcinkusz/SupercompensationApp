@@ -60,6 +60,17 @@ function readPalette() {
     };
 }
 
+/**
+ * Pairs the day array with a value array into Chart.js {x, y} points.
+ *
+ * This is what keeps the x axis a value axis. Passing a bare value array alongside
+ * `labels` is what produced the category scale that misplaced every band and boundary
+ * line — see the comment on scales.x below.
+ */
+function toPoints(days, values) {
+    return values.map((value, i) => ({ x: days[i], y: value }));
+}
+
 let chartInstance = null;
 
 window.renderSupercompChart = function (days, performance, baselines, phases, sprintBoundaries, showPhases, showBaseline, sprintDuration) {
@@ -98,7 +109,7 @@ window.renderSupercompChart = function (days, performance, baselines, phases, sp
 
         datasets.push({
             label: 'Wydajność zespołu',
-            data: performance,
+            data: toPoints(days, performance),
             borderColor: function (context) {
                 const index = context.dataIndex;
                 return pointColors[index] || withAlpha(palette.blue, 0.9);
@@ -119,7 +130,7 @@ window.renderSupercompChart = function (days, performance, baselines, phases, sp
     } else {
         datasets.push({
             label: 'Wydajność zespołu',
-            data: performance,
+            data: toPoints(days, performance),
             borderColor: palette.blue,
             backgroundColor: withAlpha(palette.blue, 0.1),
             borderWidth: 3,
@@ -134,7 +145,7 @@ window.renderSupercompChart = function (days, performance, baselines, phases, sp
     if (showBaseline) {
         datasets.push({
             label: 'Baseline',
-            data: baselines,
+            data: toPoints(days, baselines),
             borderColor: withAlpha(palette.textSecondary, 0.8),
             backgroundColor: 'transparent',
             borderWidth: 2,
@@ -170,7 +181,6 @@ window.renderSupercompChart = function (days, performance, baselines, phases, sp
     chartInstance = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: days,
             datasets: datasets
         },
         options: {
@@ -197,9 +207,16 @@ window.renderSupercompChart = function (days, performance, baselines, phases, sp
                     cornerRadius: 8,
                     callbacks: {
                         title: function (items) {
-                            const day = items[0].label;
-                            const sprint = Math.floor(day / sprintDuration) + 1;
-                            const dayInSprint = (day % sprintDuration) + 1;
+                            // `items[0].label` is a STRING on a category axis and a
+                            // fractional day on a linear one; `parsed.x` is the number
+                            // either way. The day-in-sprint is floored because a reader
+                            // is being told which day of the sprint they are looking at,
+                            // and "dzień 6.4" is not one — the old code reported exactly
+                            // that at any fractional x.
+                            const day = items[0].parsed.x;
+                            const total = sprintBoundaries.length + 1;
+                            const sprint = Math.min(Math.floor(day / sprintDuration) + 1, total);
+                            const dayInSprint = Math.floor(day % sprintDuration) + 1;
                             return `Dzień ${day} (Sprint ${sprint}, dzień ${dayInSprint})`;
                         },
                         label: function (item) {
@@ -220,6 +237,21 @@ window.renderSupercompChart = function (days, performance, baselines, phases, sp
             },
             scales: {
                 x: {
+                    // LINEAR, and this is the whole fix. With `labels: days` and no
+                    // explicit type, Chart.js gives this scale a CATEGORY axis, where
+                    // positions are addressed by point INDEX rather than by value. Two
+                    // features then passed day values where an index was expected: the
+                    // phase bands via getPixelForValue(day), and the sprint boundary
+                    // annotations via xMin/xMax. At 50 points per sprint over a 10-day
+                    // sprint that is a factor of five, so every band and every boundary
+                    // line was squeezed into the opening fifth of the chart while the
+                    // curve itself was drawn correctly across the full width.
+                    //
+                    // Day is a continuous quantity — GenerateChartData already emits it
+                    // fractional, rounded to 2dp — so a linear scale is what this always
+                    // should have been.
+                    type: 'linear',
+                    bounds: 'data',
                     title: {
                         display: true,
                         text: 'Dzień',
@@ -257,8 +289,20 @@ window.renderSupercompChart = function (days, performance, baselines, phases, sp
 
                 const ctx = chart.ctx;
                 const xAxis = chart.scales.x;
-                const yAxis = chart.scales.y;
                 const chartArea = chart.chartArea;
+
+                // The bands are positioned by DAY VALUE, so they are only meaningful on
+                // a value scale. If this axis is ever made categorical again,
+                // getPixelForValue would silently reinterpret every day as an ordinal
+                // and the bands would land in the wrong place while still looking
+                // deliberate. Drawing nothing is the better failure: a missing band is
+                // noticed, a misplaced one is not.
+                if (xAxis.type !== 'linear') {
+                    console.warn(
+                        'supercompChart: the x scale is "' + xAxis.type + '", not linear. ' +
+                        'Phase bands are positioned by day value and have been skipped.');
+                    return;
+                }
 
                 // Draw colored backgrounds for each sprint's phases
                 const totalDays = days.length > 0 ? days[days.length - 1] : 0;
