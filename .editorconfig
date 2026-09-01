@@ -6,9 +6,14 @@
 #
 # The settings below describe the code as it is rather than as somebody would like it to
 # be: 4-space indent, spaces, LF, final newline, no trailing whitespace, file-scoped
-# namespaces. The tree was audited before this file was written and already satisfies
-# all of it, so the gate starts green and any future red is a real regression rather
-# than a backlog nobody chose.
+# namespaces, single-line guard clauses preserved. The tree satisfies all of it, so the
+# gate starts green and any future red is a real regression rather than a backlog nobody
+# chose.
+#
+# One setting in the first draft did not describe the code and the gate caught it on its
+# first run — see `csharp_preserve_single_line_statements` below. Worth knowing before
+# adding a setting here: an .editorconfig entry is an assertion about every existing
+# file, and the only thing that checks it is this repository's own CI.
 
 root = true
 
@@ -69,7 +74,19 @@ csharp_space_before_colon_in_inheritance_clause = true
 csharp_space_after_colon_in_inheritance_clause = true
 csharp_space_around_binary_operators = before_and_after
 
-csharp_preserve_single_line_statements = false
+# Both are the Roslyn defaults, and both are kept because the code relies on them.
+# `preserve_single_line_statements` was briefly set to `false` in the first version of
+# this file and CI rejected it — Services/SupercompensationService.cs `GetPhase` is three
+# parallel single-line guard clauses that read as a table:
+#
+#     if (normalizedDay <= config.FatiguePhaseEnd) return "Fatigue";
+#     if (normalizedDay <= config.RecoveryPhaseEnd) return "Recovery";
+#     return "Supercompensation";
+#
+# `false` would split the first two across six lines and lose the parallelism. The
+# setting was a style nobody had chosen, asserted about code that does the opposite;
+# the audit behind this file checked whitespace and namespaces and did not check it.
+csharp_preserve_single_line_statements = true
 csharp_preserve_single_line_blocks = true
 
 # `using` placement is deliberately left at its default severity. Services/
