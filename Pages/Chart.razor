@@ -117,11 +117,11 @@
     {
         if (Index.LastTableData is null) return;
 
-        var csv = "Day,Sprint,DayInSprint,Phase,Baseline,Deviation,Performance\n";
-        foreach (var p in Index.LastTableData)
-        {
-            csv += $"{p.Day},{p.SprintNumber},{p.DayInSprint},{p.Phase},{p.Baseline},{p.Deviation},{p.Performance}\n";
-        }
+        // The formatting lives in Services/CsvExporter so a unit test can reach it. It
+        // used to be string interpolation here, which formats a double with the CURRENT
+        // culture — and under pl-PL, which is what this app's own <html lang="pl">
+        // invites, every decimal comma became an extra field separator.
+        var csv = CsvExporter.ToCsv(Index.LastTableData);
 
         await JS.InvokeVoidAsync("downloadCsv", csv, "supercompensation_data.csv");
     }
