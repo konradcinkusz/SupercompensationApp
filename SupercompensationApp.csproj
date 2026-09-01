@@ -13,6 +13,28 @@
     <None Remove="nul" />
   </ItemGroup>
 
+  <!--
+    This project lives at the REPOSITORY ROOT, so the SDK's default item globs
+    (`**/*.cs`, `**/*.razor`, ...) cover the entire repository — including any sibling
+    project's source. Without these excludes, tests/SupercompensationApp.Tests/*.cs is
+    compiled into the *application* assembly, which has no xUnit reference, and the
+    build fails with CS0246 on `Xunit` attributed to this csproj rather than to the
+    test project. That is exactly what happened when the test project was first added.
+
+    The structural fix is to move this project under src/ so that root-level directories
+    stop being inside it. That is a large, unrelated move — it touches every file, the
+    solution, and the README's run instructions — so it is deliberately not done here.
+    Recorded in the roadmap instead.
+
+    Until then: EVERY new top-level directory containing code needs a line here.
+  -->
+  <ItemGroup>
+    <Compile Remove="tests/**" />
+    <Content Remove="tests/**" />
+    <None Remove="tests/**" />
+    <EmbeddedResource Remove="tests/**" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" PrivateAssets="all" />
