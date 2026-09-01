@@ -7,10 +7,31 @@
     <base href="/" />
     <link href="css/app.css" rel="stylesheet" />
 
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <!-- Chart.js annotation plugin (for sprint boundary lines) -->
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <!--
+      Chart.js and its annotation plugin, from a CDN with Subresource Integrity.
+
+      The `integrity` hash and the version in the URL MUST be changed together. A hash
+      that does not match what the CDN returns makes the browser refuse the script, and
+      the symptom is not an error a user will report — it is a blank chart. Dependabot
+      cannot see these: it does not read HTML script tags, so nothing will open a pull
+      request when they go stale (see .github/dependabot.yml).
+
+      Note the chart.js path: `chart.umd.js`, NOT `chart.umd.min.js`. chart.js 4.4.1
+      publishes no minified file at all — jsDelivr generates `.min.js` on demand, so a
+      hash of it would be a promise about bytes the package author never published and
+      could not be reproduced from the registry. `chart.umd.js` IS the minified UMD
+      build; upstream simply does not put `.min` in its name, so this costs nothing.
+
+      Hashes computed from the npm tarballs: chart.js@4.4.1 dist/chart.umd.js (205,125
+      bytes) and chartjs-plugin-annotation@3.0.1 dist/chartjs-plugin-annotation.min.js
+      (34,500 bytes).
+    -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"
+            integrity="sha384-dug+JxfBvklEQdJ4AYuBBAIScUz0bVN73xpy273gcAwHjb3qI0fXmuYNaNfdyYJG"
+            crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"
+            integrity="sha384-oNtu+d18330MVFpltUTve1DatxCkkctlpA2AC3GulbVFOSqhHdDat3qHse/Lbuek"
+            crossorigin="anonymous"></script>
 </head>
 <body>
     <div id="app">

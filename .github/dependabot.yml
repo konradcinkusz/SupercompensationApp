@@ -1,0 +1,73 @@
+# Dependabot configuration
+#
+# REPO-BASELINE section 1 lists dependency-update automation against the failure it
+# prevents: "vulnerable pins nobody owns; the 'we'll update later' that never comes".
+#
+# Read the note at the bottom before assuming this file covers everything this
+# repository depends on. It does not, and cannot.
+
+version: 2
+
+updates:
+  # ── NuGet ──────────────────────────────────────────────────────────────────
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    groups:
+      # One review a week rather than five. Patch and minor updates to the ASP.NET
+      # Core packages move together anyway — they ship as a set — so separate pull
+      # requests would be five reviews of one decision.
+      aspnetcore:
+        patterns:
+          - "Microsoft.AspNetCore.*"
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: "deps"
+
+  # ── GitHub Actions ─────────────────────────────────────────────────────────
+  # Not an afterthought. The runner is already warning that actions/checkout@v4 and
+  # actions/setup-dotnet@v4 target Node 20, which is deprecated and being forced onto
+  # Node 24 — visible in every workflow log since CI was added, and exactly the class
+  # of staleness nobody notices without something that opens a pull request about it.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    groups:
+      actions:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: "deps"
+
+# ── What this file does NOT cover ────────────────────────────────────────────
+#
+# Two dependencies of this application are invisible to Dependabot, and both are
+# third-party JavaScript with full DOM access:
+#
+#   1. Chart.js and chartjs-plugin-annotation, loaded as <script src> tags from
+#      cdn.jsdelivr.net in wwwroot/index.html. Dependabot does not read HTML script
+#      tags, so nothing will ever open a pull request when those versions go stale.
+#      They carry Subresource Integrity hashes as of this change, so at least the
+#      *bytes* are verified even though the *version* is not.
+#
+#   2. The gitleaks container image pinned inside a `run:` step in secret-scan.yml,
+#      which is an opaque string to Dependabot.
+#
+# All three are manual review items. Written down here rather than left for somebody
+# to discover, because a dependency file that looks complete is worse than one that
+# says where it stops.
