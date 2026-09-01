@@ -67,12 +67,18 @@ public class SprintConfigurationValidationTests
         var service = new SupercompensationService();
 
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => { service.GenerateChartData(
-                new SprintConfiguration { SprintDuration = -10 }, Team()); });
+            () =>
+            {
+                service.GenerateChartData(
+                new SprintConfiguration { SprintDuration = -10 }, Team());
+            });
 
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => { service.GenerateChartData(
-                new SprintConfiguration { NumberOfSprints = -3 }, Team()); });
+            () =>
+            {
+                service.GenerateChartData(
+                new SprintConfiguration { NumberOfSprints = -3 }, Team());
+            });
     }
 
     // ── Every parameter, both directions ─────────────────────────────────────
