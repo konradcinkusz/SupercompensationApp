@@ -51,10 +51,34 @@ public class SupercompensationService
     }
 
     /// <summary>
+    /// Refuses a configuration that cannot produce a meaningful curve, naming the
+    /// offending property and its permitted range.
+    ///
+    /// Throwing is the point. The alternative — guarding the symptom downstream with
+    /// double.IsNaN checks — leaves the 0/0 division in place for the next caller to
+    /// find, and silently returning NaN is exactly the behaviour that made
+    /// SprintDuration = 0 render a blank chart with no error.
+    /// </summary>
+    private static void EnsureUsable(SprintConfiguration config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+
+        var problems = config.Validate();
+        if (problems.Count > 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(config),
+                string.Join(" ", problems));
+        }
+    }
+
+    /// <summary>
     /// Generate full dataset: fine-grained points for smooth chart + discrete daily data.
     /// </summary>
     public ChartDataSet GenerateChartData(SprintConfiguration config, List<TeamMember> team, int pointsPerSprint = 50)
     {
+        EnsureUsable(config);
+
         var teamWeight = CalculateTeamWeight(team);
         var totalDays = config.NumberOfSprints * config.SprintDuration;
         var totalPoints = config.NumberOfSprints * pointsPerSprint;
@@ -130,6 +154,8 @@ public class SupercompensationService
     /// </summary>
     public List<SprintDataPoint> GenerateTableData(SprintConfiguration config, List<TeamMember> team)
     {
+        EnsureUsable(config);
+
         var teamWeight = CalculateTeamWeight(team);
         var points = new List<SprintDataPoint>();
 

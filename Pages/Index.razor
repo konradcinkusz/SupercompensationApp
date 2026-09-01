@@ -104,7 +104,16 @@
     </section>
 
     <section class="config-section action-section">
-        <button class="btn-generate" @onclick="GenerateChart">
+        @if (Problems.Count > 0)
+        {
+            <ul class="validation-errors">
+                @foreach (var problem in Problems)
+                {
+                    <li>@problem</li>
+                }
+            </ul>
+        }
+        <button class="btn-generate" @onclick="GenerateChart" disabled="@(Problems.Count > 0)">
             📊 Generuj wykres hiperkompensacji
         </button>
     </section>
@@ -140,8 +149,23 @@
         Team = TeamMember.GetDefaultTeam();
     }
 
+    // Recomputed on every render, which is what makes the button state and the message
+    // list track what the user has typed without an explicit validate step.
+    private IReadOnlyList<string> Problems => Config.Validate();
+
     private void GenerateChart()
     {
+        // The service throws on an unusable configuration, so this guard is about WHERE
+        // the reader finds out. Before it, SprintDuration = 0 navigated to a blank chart
+        // with no error: 0/0 made every deviation NaN, every comparison against NaN is
+        // false, and the summaries kept their double.MinValue and double.MaxValue
+        // initialisers. Reporting it beside the field that caused it is the difference
+        // between a bug report and a fix.
+        if (Problems.Count > 0)
+        {
+            return;
+        }
+
         LastChartData = SuperService.GenerateChartData(Config, Team);
         LastTableData = SuperService.GenerateTableData(Config, Team);
         Navigation.NavigateTo("/chart");
