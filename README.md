@@ -134,12 +134,62 @@ aplikacja uruchomi się, ale wykres się nie narysuje. Nie działa offline.
 kształtu, o którym mówi teoria superkompensacji, z parametrami, które ustawiasz sam —
 przydatna do rozmowy o tym kształcie, a nie do przewidywania czyjejkolwiek wydajności.
 
-## Technologie
+## Technologie i zależności
 
 - .NET 8 Blazor WebAssembly
-- Chart.js 4.4 + chartjs-plugin-annotation
-- JS Interop dla wykresów
-- Czysty CSS (dark theme, responsive)
+- JS Interop dla wykresu i dla `localStorage`
+- Czysty CSS (dark theme, responsive) — bez frameworka
+
+Pełna lista zależności zewnętrznych. Liczba w tej tabeli, która rośnie w diffie, jest
+pytaniem, które ktoś może zadać; tabela, której nikt nie aktualizuje, jest widocznie
+nieaktualna.
+
+**NuGet** — wersje w `Directory.Packages.props`, aktualizowane przez Dependabota:
+
+| Pakiet | Wersja | Po co |
+|---|---|---|
+| `Microsoft.AspNetCore.Components.WebAssembly` | 8.0.12 | środowisko uruchomieniowe aplikacji |
+| `Microsoft.AspNetCore.Components.WebAssembly.DevServer` | 8.0.12 | tylko `dotnet run` (`PrivateAssets`) |
+| `Microsoft.NET.Test.Sdk` | 17.11.1 | tylko testy |
+| `xunit` | 2.9.2 | tylko testy |
+| `xunit.runner.visualstudio` | 2.8.2 | tylko testy |
+| `coverlet.collector` | 6.0.2 | tylko testy |
+
+**CDN** — ładowane w `wwwroot/index.html`. **Dependabot ich nie widzi**: nie czyta
+znaczników `<script>` w HTML, więc nic nie zgłosi, gdy się zestarzeją. Wersję i sumę
+kontrolną trzeba zmieniać razem — błędna suma sprawia, że przeglądarka po cichu odrzuca
+skrypt, a objawem jest pusty wykres, nie błąd.
+
+| Skrypt | Wersja | `integrity` (sha384) |
+|---|---|---|
+| `chart.js` (`dist/chart.umd.js`) | 4.4.1 | `dug+JxfBvklEQdJ4AYuBBAIScUz0bVN73xpy273gcAwHjb3qI0fXmuYNaNfdyYJG` |
+| `chartjs-plugin-annotation` | 3.0.1 | `oNtu+d18330MVFpltUTve1DatxCkkctlpA2AC3GulbVFOSqhHdDat3qHse/Lbuek` |
+
+`chart.js` wskazuje `dist/chart.umd.js`, a nie `chart.umd.min.js`: wersja 4.4.1 **nie
+publikuje** pliku zminifikowanego — `.min.js` generuje jsDelivr w locie, więc suma
+kontrolna dotyczyłaby bajtów, których autor pakietu nigdy nie opublikował. `chart.umd.js`
+i tak jest budową zminifikowaną, tylko bez `.min` w nazwie.
+
+Trzecia zależność niewidoczna dla Dependabota: obraz `zricethezav/gitleaks:v8.28.0`
+przypięty wewnątrz kroku `run:` w `.github/workflows/secret-scan.yml`.
+
+## Rozwój
+
+Szczegóły w [`CONTRIBUTING.md`](CONTRIBUTING.md) — jak uruchomić, jak testować i jak
+odtworzyć każdy job CI lokalnie.
+
+Na każdy pull request uruchamiane są:
+
+| Job | Co sprawdza |
+|---|---|
+| **CI / Build** | `dotnet restore`, `build -c Release`, `dotnet test` |
+| **CI / Format check** | `dotnet format --verify-no-changes --severity error` |
+| **Secret scan / gitleaks** | całą historię, nie tylko drzewo robocze |
+| **CodeQL** | `csharp` oraz `javascript-typescript` |
+| **Deploy GitHub Pages / Build** | że artefakt publikacji faktycznie się składa |
+
+Ścieżki chronione — pliki, których uszkodzenie psuje **każdy** kolejny pull request — są
+wypisane w [`ROADMAP.md`](ROADMAP.md) §5 i w `.github/CODEOWNERS`.
 
 ## Wymagania
 
