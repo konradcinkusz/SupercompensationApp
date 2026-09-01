@@ -31,6 +31,15 @@ using SupercompensationApp.Models;
 public class AppStateService
 {
     private readonly SupercompensationService _service;
+    private readonly IStateStore _store;
+
+    /// <summary>
+    /// Increments on every edit. A debounced save captures the value, waits, and only
+    /// writes if nothing has superseded it. Blazor WebAssembly is single-threaded, so a
+    /// plain counter is correct here and is a great deal easier to read than a
+    /// CancellationTokenSource that has to be cancelled and disposed in the right order.
+    /// </summary>
+    private int _editSequence;
 
     /// <summary>
     /// The signature of the configuration and team that produced the current results.
@@ -38,10 +47,24 @@ public class AppStateService
     /// </summary>
     private string? _resultsSignature;
 
-    public AppStateService(SupercompensationService service)
+    public AppStateService(SupercompensationService service, IStateStore store)
     {
         _service = service ?? throw new ArgumentNullException(nameof(service));
+        _store = store ?? throw new ArgumentNullException(nameof(store));
     }
+
+    /// <summary>
+    /// How long an edit waits before being written. Settable so a test does not have to
+    /// sleep for real time to exercise the debounce.
+    /// </summary>
+    public TimeSpan SaveDelay { get; set; } = TimeSpan.FromMilliseconds(400);
+
+    /// <summary>
+    /// True when a stored payload was found and could not be used, so the application is
+    /// showing defaults instead. Surfaced in the UI: an empty team with no explanation is
+    /// worse than a lost one with a sentence.
+    /// </summary>
+    public bool RestoreFailed { get; private set; }
 
     /// <summary>
     /// Raised when the state changes in a way another page should notice. A page
@@ -134,6 +157,109 @@ public class AppStateService
     {
         Team = TeamMember.GetDefaultTeam();
         NotifyChanged();
+    }
+
+    // ── Persistence ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Restores the configuration and team from browser storage.
+    ///
+    /// Called once from MainLayout, which wraps every page, so it runs before anything is
+    /// shown regardless of which route the user landed on.
+    /// </summary>
+    public async Task LoadAsync()
+    {
+        var json = await _store.ReadAsync(StateSerializer.StorageKey);
+
+        if (json is null)
+        {
+            // Nothing stored. A first visit, or storage is unavailable. Neither is a
+            // failure and neither should say anything to the user.
+            RestoreFailed = false;
+            return;
+        }
+
+        if (StateSerializer.TryDeserialize(json, out var config, out var team))
+        {
+            Config = config;
+            Team = team;
+            RestoreFailed = false;
+        }
+        else
+        {
+            // Corrupt, hand-edited, or written by an older schema. Keep the defaults
+            // already in place and say so rather than failing silently.
+            RestoreFailed = true;
+        }
+
+        NotifyChanged();
+    }
+
+    /// <summary>
+    /// Writes the current configuration and team immediately.
+    /// </summary>
+    public async Task SaveAsync()
+    {
+        await _store.WriteAsync(
+            StateSerializer.StorageKey,
+            StateSerializer.Serialize(Config, Team));
+    }
+
+    /// <summary>
+    /// Call from a binding's @bind:after, or after a team change. Notifies subscribers
+    /// and schedules a debounced write.
+    ///
+    /// Debounced rather than saved per keystroke because @bind:after fires on every
+    /// committed edit across six numeric fields and a row per team member; and there is
+    /// deliberately no Save button, because a persistence problem should not be solved by
+    /// adding an affordance the UI does not otherwise have.
+    /// </summary>
+    public async Task OnEditedAsync()
+    {
+        NotifyChanged();
+
+        // Interlocked/Volatile rather than a bare ++ and ==. Blazor WebAssembly is
+        // single-threaded so this is not needed in production, but a Task.Delay
+        // continuation resumes on a pool thread under a test runner, and a persistence
+        // test that fails one run in fifty is worse than a slightly noisier line.
+        var mine = Interlocked.Increment(ref _editSequence);
+
+        if (SaveDelay > TimeSpan.Zero)
+        {
+            await Task.Delay(SaveDelay);
+        }
+
+        if (mine != Volatile.Read(ref _editSequence))
+        {
+            // A later edit arrived while this one was waiting; that one will write.
+            return;
+        }
+
+        await SaveAsync();
+    }
+
+    public async Task AddMemberAsync()
+    {
+        AddMember();
+        await SaveAsync();
+    }
+
+    public async Task RemoveMemberAsync(TeamMember member)
+    {
+        RemoveMember(member);
+        await SaveAsync();
+    }
+
+    /// <summary>
+    /// Restores the default team AND clears the stored copy. Without the second half the
+    /// next reload would undo the reset, which is the kind of thing that reads as the
+    /// application ignoring you.
+    /// </summary>
+    public async Task ResetTeamAsync()
+    {
+        ResetTeam();
+        RestoreFailed = false;
+        await _store.RemoveAsync(StateSerializer.StorageKey);
     }
 
     /// <summary>

@@ -1,4 +1,6 @@
 @inherits LayoutComponentBase
+@inject AppStateService State
+
 
 <div class="app-container">
     <header class="app-header">
@@ -27,3 +29,12 @@
         <p>Feedback i hiperkompensacja — zarządzanie IT w 2026 · Konrad</p>
     </footer>
 </div>
+
+@code {
+    // MainLayout wraps every page, so this runs once at startup regardless of which
+    // route the user landed on — including a deep link straight to /chart or /data.
+    protected override async Task OnInitializedAsync()
+    {
+        await State.LoadAsync();
+    }
+}
