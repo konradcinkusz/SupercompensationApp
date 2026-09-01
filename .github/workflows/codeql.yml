@@ -55,7 +55,7 @@ jobs:
 
       - name: Setup .NET
         if: matrix.language == 'csharp'
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           # Kept in step with ci.yml and with SupercompensationApp.csproj's net8.0.
           dotnet-version: "8.0.x"
