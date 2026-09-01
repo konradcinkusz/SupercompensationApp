@@ -3,6 +3,12 @@
 Interaktywna aplikacja webowa do modelowania hiperkompensacji w sprintach Agile.
 Wizualizacja krzywej zmęczenia → regeneracji → superkompensacji z konfigurowalnymi parametrami zespołu i sprintu.
 
+## Roadmap
+
+Plan rozwoju repozytorium — definicja „gotowego”, fazy, kolejność prac, zależności
+i ścieżki chronione — znajduje się w [`ROADMAP.md`](ROADMAP.md).
+Bieżący postęp: [tracker #18](https://github.com/konradcinkusz/SupercompensationApp/issues/18).
+
 ## Uruchomienie
 
 ```bash
