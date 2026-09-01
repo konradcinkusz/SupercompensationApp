@@ -1,0 +1,32 @@
+# Code owners
+#
+# REPO-BASELINE section 1 lists this file against the failure it prevents:
+# "security-relevant paths merged without the right reviewer".
+#
+# The explicit entries below are not decoration. They are the PROTECTED PATHS from
+# ROADMAP.md section 5 — the files whose breakage compromises every later pull request
+# rather than one feature. A broken CSS rule is contained; a broken format gate or
+# validator turns every subsequent pull request into three-retries-and-force-merge,
+# which is CI ceasing to exist.
+#
+# Listing them here means the set exists in two places on purpose: in ROADMAP.md with
+# the reasoning, and here where GitHub enforces it. If you add a protected path to one,
+# add it to the other.
+
+# ── Everything ───────────────────────────────────────────────────────────────
+*                               @konradcinkusz
+
+# ── Protected: the automation that gates every other change ──────────────────
+/.github/                       @konradcinkusz
+/.github/workflows/             @konradcinkusz
+/.gitleaks.toml                 @konradcinkusz
+
+# ── Protected: the build ─────────────────────────────────────────────────────
+/SupercompensationApp.csproj    @konradcinkusz
+/SupercompensationApp.sln       @konradcinkusz
+/Directory.Build.props          @konradcinkusz
+/Directory.Packages.props       @konradcinkusz
+
+# ── Protected: the format gate reads this, so it decides whether every pull
+#    request is green ──────────────────────────────────────────────────────────
+/.editorconfig                  @konradcinkusz
