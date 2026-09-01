@@ -1,9 +1,79 @@
 // Chart.js interop for Blazor Supercompensation App
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Colours come from the CSS custom properties in wwwroot/css/app.css, never from
+// literals here.
+//
+// This file used to carry its own copy of the palette, and the copy had drifted: the
+// chart title was painted '#1e293b' while .chart-container's background is
+// var(--bg-card), which is ALSO #1e293b. Contrast ratio 1.00:1 — the heading of the
+// application's central visual, drawn in its own background colour. The axis titles
+// (#475569, 1.93:1) and tick labels (#64748b, 3.07:1) were the same mistake in milder
+// form: all of them were picked for a light background, and the chart is the one
+// surface that was never converted when the app went dark.
+//
+// There is one palette. A second copy of it in a different file is what produced that
+// defect, so the fix is to stop having a second copy rather than to correct it.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Reads a CSS custom property off :root. Returns '' if the stylesheet has not loaded.
+ */
+function cssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+/**
+ * Applies an alpha channel to a #rrggbb value, so the palette can be reused at the
+ * opacities this chart wants (grid lines, phase bands, the tooltip ground) without
+ * re-encoding the same colour as an rgba() literal.
+ */
+function withAlpha(hex, alpha) {
+    const value = String(hex).replace('#', '');
+    const r = parseInt(value.substring(0, 2), 16);
+    const g = parseInt(value.substring(2, 4), 16);
+    const b = parseInt(value.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/**
+ * The palette, read once per render.
+ *
+ * FALLBACK is the single literal left in this file, and it is deliberately NOT a copy
+ * of any palette value: it is a last-resort readable-on-dark colour used only if
+ * app.css failed to load, in which case the page has larger problems. Making it a
+ * distinct value means a stylesheet that did not load looks wrong rather than looking
+ * fine, which is the direction a failsafe should fail in.
+ */
+function readPalette() {
+    const FALLBACK = '#ffffff';
+    const read = (name) => cssVar(name) || FALLBACK;
+    return {
+        textPrimary: read('--text-primary'),
+        textSecondary: read('--text-secondary'),
+        textMuted: read('--text-muted'),
+        bgPrimary: read('--bg-primary'),
+        blue: read('--accent-blue'),
+        red: read('--accent-red'),
+        amber: read('--accent-amber'),
+        green: read('--accent-green'),
+    };
+}
+
 let chartInstance = null;
 
 window.renderSupercompChart = function (days, performance, baselines, phases, sprintBoundaries, showPhases, showBaseline, sprintDuration) {
     const ctx = document.getElementById('supercompChart');
     if (!ctx) return;
+
+    const palette = readPalette();
+
+    // Chart.js defaults its text to '#666', which is 2.55:1 on --bg-card and fails
+    // WCAG AA. That is why the LEGEND was unreadable too — it sets no colour of its
+    // own, so it inherited the library default. Setting the default rather than
+    // enumerating every element means anything added later inherits a legible colour
+    // instead of quietly reintroducing this bug.
+    Chart.defaults.color = palette.textSecondary;
 
     // Destroy existing chart
     if (chartInstance) {
@@ -18,25 +88,25 @@ window.renderSupercompChart = function (days, performance, baselines, phases, sp
     if (showPhases) {
         // Split performance by phase with colors
         const phaseColors = {
-            'Fatigue': 'rgba(239, 68, 68, 0.9)',       // red
-            'Recovery': 'rgba(245, 158, 11, 0.9)',      // amber
-            'Supercompensation': 'rgba(16, 185, 129, 0.9)' // green
+            'Fatigue': withAlpha(palette.red, 0.9),       // red
+            'Recovery': withAlpha(palette.amber, 0.9),      // amber
+            'Supercompensation': withAlpha(palette.green, 0.9) // green
         };
 
         // Create segments with per-point coloring
-        const pointColors = phases.map(p => phaseColors[p] || 'rgba(59, 130, 246, 0.9)');
+        const pointColors = phases.map(p => phaseColors[p] || withAlpha(palette.blue, 0.9));
 
         datasets.push({
             label: 'Wydajność zespołu',
             data: performance,
             borderColor: function (context) {
                 const index = context.dataIndex;
-                return pointColors[index] || 'rgba(59, 130, 246, 0.9)';
+                return pointColors[index] || withAlpha(palette.blue, 0.9);
             },
             segment: {
                 borderColor: function (ctx) {
                     const idx = ctx.p0DataIndex;
-                    return pointColors[idx] || 'rgba(59, 130, 246, 0.9)';
+                    return pointColors[idx] || withAlpha(palette.blue, 0.9);
                 }
             },
             backgroundColor: 'transparent',
@@ -50,8 +120,8 @@ window.renderSupercompChart = function (days, performance, baselines, phases, sp
         datasets.push({
             label: 'Wydajność zespołu',
             data: performance,
-            borderColor: 'rgba(59, 130, 246, 1)',
-            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            borderColor: palette.blue,
+            backgroundColor: withAlpha(palette.blue, 0.1),
             borderWidth: 3,
             pointRadius: 0,
             tension: 0.4,
@@ -65,7 +135,7 @@ window.renderSupercompChart = function (days, performance, baselines, phases, sp
         datasets.push({
             label: 'Baseline',
             data: baselines,
-            borderColor: 'rgba(148, 163, 184, 0.8)',
+            borderColor: withAlpha(palette.textSecondary, 0.8),
             backgroundColor: 'transparent',
             borderWidth: 2,
             borderDash: [8, 4],
@@ -83,15 +153,15 @@ window.renderSupercompChart = function (days, performance, baselines, phases, sp
             type: 'line',
             xMin: boundary,
             xMax: boundary,
-            borderColor: 'rgba(100, 116, 139, 0.4)',
+            borderColor: withAlpha(palette.textMuted, 0.4),
             borderWidth: 1,
             borderDash: [4, 4],
             label: {
                 content: 'Sprint ' + (i + 2),
                 enabled: true,
                 position: 'start',
-                backgroundColor: 'rgba(100, 116, 139, 0.7)',
-                color: '#fff',
+                backgroundColor: withAlpha(palette.textMuted, 0.7),
+                color: palette.textPrimary,
                 font: { size: 11 }
             }
         };
@@ -120,7 +190,7 @@ window.renderSupercompChart = function (days, performance, baselines, phases, sp
                     }
                 },
                 tooltip: {
-                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                    backgroundColor: withAlpha(palette.bgPrimary, 0.95),
                     titleFont: { size: 13 },
                     bodyFont: { size: 12 },
                     padding: 12,
@@ -145,7 +215,7 @@ window.renderSupercompChart = function (days, performance, baselines, phases, sp
                     text: 'Model Hiperkompensacji — Wydajność Zespołu',
                     font: { size: 18, weight: 'bold' },
                     padding: { bottom: 20 },
-                    color: '#1e293b'
+                    color: palette.textPrimary
                 }
             },
             scales: {
@@ -154,14 +224,14 @@ window.renderSupercompChart = function (days, performance, baselines, phases, sp
                         display: true,
                         text: 'Dzień',
                         font: { size: 14 },
-                        color: '#475569'
+                        color: palette.textSecondary
                     },
                     grid: {
-                        color: 'rgba(148, 163, 184, 0.15)'
+                        color: withAlpha(palette.textSecondary, 0.15)
                     },
                     ticks: {
                         maxTicksLimit: 20,
-                        color: '#64748b'
+                        color: palette.textSecondary
                     }
                 },
                 y: {
@@ -169,13 +239,13 @@ window.renderSupercompChart = function (days, performance, baselines, phases, sp
                         display: true,
                         text: 'Wydajność zespołu (ważona)',
                         font: { size: 14 },
-                        color: '#475569'
+                        color: palette.textSecondary
                     },
                     grid: {
-                        color: 'rgba(148, 163, 184, 0.15)'
+                        color: withAlpha(palette.textSecondary, 0.15)
                     },
                     ticks: {
-                        color: '#64748b'
+                        color: palette.textSecondary
                     }
                 }
             }
@@ -200,19 +270,19 @@ window.renderSupercompChart = function (days, performance, baselines, phases, sp
                     // Fatigue phase (0-50%)
                     drawPhaseRect(ctx, xAxis, chartArea,
                         sprintStart, sprintStart + sprintDuration * 0.5,
-                        'rgba(239, 68, 68, 0.05)');
+                        withAlpha(palette.red, 0.05));
 
                     // Recovery phase (50-80%)
                     drawPhaseRect(ctx, xAxis, chartArea,
                         sprintStart + sprintDuration * 0.5,
                         sprintStart + sprintDuration * 0.8,
-                        'rgba(245, 158, 11, 0.05)');
+                        withAlpha(palette.amber, 0.05));
 
                     // Supercompensation phase (80-100%)
                     drawPhaseRect(ctx, xAxis, chartArea,
                         sprintStart + sprintDuration * 0.8,
                         sprintStart + sprintDuration,
-                        'rgba(16, 185, 129, 0.08)');
+                        withAlpha(palette.green, 0.08));
                 }
             }
         }]
