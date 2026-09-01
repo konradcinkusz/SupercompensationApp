@@ -59,16 +59,36 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @for (int i = 0; i < State.Team.Count; i++)
+                    @* Keyed by TeamMember.Id, and bound to the member rather than to
+                       Team[index].
+
+                       Without @key, Blazor's diff matches rendered elements to the
+                       previous render BY POSITION. Remove the member at index 2 of seven
+                       and every row below shifts up one, so the renderer keeps the
+                       existing <input> elements where they are and rewrites their values
+                       against the NEW occupant of each position.
+
+                       @bind on a text input commits on blur, so the concrete loss was:
+                       type a name into row 5, click the remove button on row 2 without
+                       leaving the field first, and the pending value is committed against
+                       whichever member has moved into position 5. Element state Blazor
+                       does not own — caret position, native validation state, an open
+                       <select> — follows the DOM node rather than the model for the same
+                       reason.
+
+                       TeamMember.Id already existed for exactly this and was generated,
+                       never read and never rendered anywhere. *@
+                    @foreach (var (member, position) in State.Team.Select((m, i) => (m, i + 1)))
                     {
-                        var idx = i;
-                        <tr>
-                            <td class="row-number">@(idx + 1)</td>
+                        <tr @key="member.Id">
+                            @* Display only. It is a position, not an identity, and it is
+                               deliberately not used for binding or removal. *@
+                            <td class="row-number">@position</td>
                             <td>
-                                <input type="text" @bind="State.Team[idx].Name" placeholder="Imię..." />
+                                <input type="text" @bind="member.Name" placeholder="Imię..." />
                             </td>
                             <td>
-                                <select @bind="State.Team[idx].Role">
+                                <select @bind="member.Role">
                                     <option value="Developer">Developer</option>
                                     <option value="QA">QA / Tester</option>
                                     <option value="DevOps">DevOps</option>
@@ -80,11 +100,18 @@
                                 </select>
                             </td>
                             <td>
-                                <input type="number" @bind="State.Team[idx].Weight"
+                                <input type="number" @bind="member.Weight"
                                        min="0.1" max="2.0" step="0.05" />
                             </td>
                             <td>
-                                <button class="btn-remove" @onclick="() => RemoveMember(idx)"
+                                @* Disabled rather than silently inert at one member.
+                                   A team of zero makes CalculateTeamWeight return its
+                                   sentinel 1.0, which is a different model rather than an
+                                   empty one — so the floor is real, and the reader should
+                                   be able to see it rather than click and have nothing
+                                   happen. *@
+                                <button class="btn-remove" @onclick="() => State.RemoveMember(member)"
+                                        disabled="@(!State.CanRemoveMember)"
                                         title="Usuń członka zespołu">✕</button>
                             </td>
                         </tr>
@@ -125,11 +152,6 @@
     // construct the state without instantiating a page.
 
     private IReadOnlyList<string> Problems => State.Problems;
-
-    private void RemoveMember(int index)
-    {
-        State.RemoveMember(State.Team[index]);
-    }
 
     private void GenerateChart()
     {

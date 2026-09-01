@@ -163,6 +163,58 @@ public class AppStateServiceTests
             "and it should be the one that was passed in, identified by Id.");
     }
 
+    [Fact]
+    public void MemberIdsStayUniqueAcrossAddRemoveAndResetCycles()
+    {
+        // TeamMember.Id is now the @key for the team table rows (#13), so a duplicate id
+        // would make Blazor's diff match two different rows to one rendered element —
+        // reintroducing the very defect @key was added to fix, and in a form that is
+        // harder to see because the markup looks correct.
+        var state = NewState();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        void Record()
+        {
+            foreach (var member in state.Team)
+            {
+                Assert.True(
+                    !string.IsNullOrWhiteSpace(member.Id),
+                    "Every member needs an id: it is what keys the table row.");
+            }
+
+            var ids = state.Team.Select(m => m.Id).ToList();
+            Assert.True(
+                ids.Distinct(StringComparer.Ordinal).Count() == ids.Count,
+                $"Ids must be unique within the team, got: {string.Join(", ", ids)}");
+
+            foreach (var id in ids)
+            {
+                seen.Add(id);
+            }
+        }
+
+        Record();
+
+        for (var cycle = 0; cycle < 3; cycle++)
+        {
+            state.AddMember();
+            state.AddMember();
+            Record();
+
+            state.RemoveMember(state.Team[1]);
+            Record();
+
+            state.ResetTeam();
+            Record();
+        }
+
+        Assert.True(
+            seen.Count > state.Team.Count,
+            "Sanity check on the test: across three add/remove/reset cycles it should " +
+            "have observed more distinct ids than a single team holds, or it is not " +
+            "exercising anything.");
+    }
+
     // ── Change notification ──────────────────────────────────────────────────
 
     [Fact]
