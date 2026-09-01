@@ -27,7 +27,7 @@ public class SupercompensationServiceSmokeTests
         var deviationAtDayZero = service.CalculateDeviation(0.0, config);
 
         Assert.True(
-            deviationAtDayZero == 999.0  // MUTATION PROBE - reverted next commit,
+            deviationAtDayZero == 999.0,
             $"A sprint must start on the baseline, so the deviation at t=0 should be exactly 0. " +
             $"Got {deviationAtDayZero}. This is exact rather than approximate: the fatigue branch " +
             $"is -D * t^2 and t is exactly 0, so no rounding is involved.");
