@@ -351,6 +351,31 @@ html, body {
     height: 100% !important;
 }
 
+/* Out-of-range sprint parameters, listed beside the button they disable.
+   The HTML min/max attributes on the inputs are hints only — they do not stop a value
+   being typed or pasted, and @bind performs no range check — so this is where the
+   reader actually finds out. */
+.validation-errors {
+    list-style: none;
+    margin: 0 0 1rem 0;
+    padding: 0.75rem 1rem;
+    background: rgba(239, 68, 68, 0.12);
+    border-left: 3px solid var(--accent-red);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    text-align: left;
+}
+
+.validation-errors li + li {
+    margin-top: 0.35rem;
+}
+
+.btn-generate:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .no-data {
     text-align: center;
     padding: 4rem 2rem;
