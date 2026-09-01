@@ -1,0 +1,37 @@
+<!--
+  Properties shared by every project in the solution.
+
+  This file is a protected path (see ROADMAP.md section 5). It applies to projects that
+  do not exist yet, so a change here is a change to the build of everything.
+
+  Two projects is the point at which shared settings stop being a nicety: with the
+  settings duplicated per csproj, "the solution has nullable enabled" becomes a claim
+  that has to be checked in N places and is true in N-1 of them. REPO-BASELINE section 1
+  names the failure one size up — ten csproj files each pinning their own versions, so
+  upgrading one library means ten diffs and version skew inside one solution.
+-->
+<Project>
+
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <!--
+      A warning nobody has to act on is a warning everybody learns to scroll past, which
+      is the same reasoning that put every other gate in this repository.
+
+      Scoped note for whoever adds the Pages deploy (#15): this is safe for
+      `dotnet build`, which is all CI does today. Blazor WebAssembly turns on trimming
+      during `dotnet publish -c Release`, and the ILLink analyzer emits IL2xxx warnings
+      that can be genuinely awkward to silence. If publish goes red on trimming rather
+      than on real code, scope this property to the compiler warnings rather than
+      deleting it — losing the setting entirely costs more than the exemption does.
+    -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <!-- Reproducible restore: fail on a package the lock/central file does not name. -->
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+</Project>

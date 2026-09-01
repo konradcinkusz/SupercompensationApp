@@ -9,11 +9,10 @@ name: CI
 # different problems with different fixes, and a single job would report whichever it
 # hit first.
 #
-# There is no `dotnet test` step yet, and its absence is a decision rather than an
-# oversight. `dotnet test` over a solution containing only a Blazor WebAssembly project
-# fails with "no test source files were specified", so a test step added here could not
-# pass without being weakened with `|| true` — which is a gate that does not gate.
-# Issue #6 adds the test project and the step together. See ROADMAP.md section 3.
+# The test step arrived with the test project (#6) rather than before it: `dotnet test`
+# over a solution containing only a Blazor WebAssembly project fails with "no test source
+# files were specified", so a step added earlier could not have passed without being
+# weakened with `|| true`, which is a gate that does not gate. See ROADMAP.md section 3.
 # ─────────────────────────────────────────────────────────────────────────────
 
 on:
@@ -64,6 +63,28 @@ jobs:
       # a Debug build never sees.
       - name: Build
         run: dotnet build SupercompensationApp.sln --no-restore --configuration Release
+
+      # --no-build, so this runs the assemblies the step above produced rather than
+      # quietly rebuilding them under different settings. A test suite that passes
+      # against a build nobody shipped is not evidence about the build that ships.
+      - name: Test
+        run: |
+          dotnet test SupercompensationApp.sln \
+            --no-build \
+            --configuration Release \
+            --logger "trx;LogFileName=test-results.trx" \
+            --results-directory TestResults
+
+      # `if: always()` on purpose: the run you most want the results from is the failing
+      # one, and a step conditioned on success uploads them exactly when nobody needs
+      # them.
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: "**/TestResults/*.trx"
+          if-no-files-found: warn
 
   format:
     name: Format check
