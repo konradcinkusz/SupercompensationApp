@@ -1,0 +1,106 @@
+name: CI
+
+# ─────────────────────────────────────────────────────────────────────────────
+# The first workflow this repository has had. Before it, a pushed commit that did not
+# compile was indistinguishable from one that did — the only thing that ever built this
+# project was a developer running `dotnet run`.
+#
+# Two jobs, deliberately separate: a build failure and a formatting failure are
+# different problems with different fixes, and a single job would report whichever it
+# hit first.
+#
+# There is no `dotnet test` step yet, and its absence is a decision rather than an
+# oversight. `dotnet test` over a solution containing only a Blazor WebAssembly project
+# fails with "no test source files were specified", so a test step added here could not
+# pass without being weakened with `|| true` — which is a gate that does not gate.
+# Issue #6 adds the test project and the step together. See ROADMAP.md section 3.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch: {}
+
+# Least privilege: neither job writes anything back to the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # SupercompensationApp.csproj targets net8.0 and pins
+  # Microsoft.AspNetCore.Components.WebAssembly at 8.0.12. Keep this in step with the
+  # csproj: a newer SDK will happily build net8.0, but pinning is what makes a green
+  # build here mean the same thing next month.
+  DOTNET_VERSION: "8.0.x"
+  DOTNET_NOLOGO: "true"
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    # A job with no timeout reports nothing when it hangs — for six hours, which is
+    # GitHub's default and not a number anybody chose. This build takes about a minute.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore SupercompensationApp.sln
+
+      # Release rather than Debug: the published WebAssembly build (issue #15) is a
+      # Release build, and Release is where trimming and the linker can surface problems
+      # a Debug build never sees.
+      - name: Build
+        run: dotnet build SupercompensationApp.sln --no-restore --configuration Release
+
+  format:
+    name: Format check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # `dotnet format` reads project metadata and needs the assets file; without this it
+      # fails on a missing project.assets.json rather than on a formatting problem.
+      - name: Restore
+        run: dotnet restore SupercompensationApp.sln
+
+      # --severity error keeps this to formatting and to analyzer violations that are
+      # already errors. It deliberately does not promote suggestions: the codebase is
+      # consistently formatted today and nothing enforced it, so this job exists to stop
+      # drift, not to relitigate style choices made before it existed.
+      #
+      # Note what is NOT covered: `dotnet format` operates on Roslyn compilation units,
+      # so the six .razor files and wwwroot/js/chart-interop.js are not checked by
+      # anything here. A green result is a claim about the three .cs files.
+      - name: Verify formatting
+        run: dotnet format SupercompensationApp.sln --verify-no-changes --severity error
+
+      # --verify-no-changes reports which files would change and roughly where, which is
+      # enough to find a stray space and not enough to fix a reindented block. On failure,
+      # apply the formatter for real and print the diff, so the log carries the exact
+      # edit the gate is asking for instead of costing a round trip to reproduce.
+      - name: Show the formatting the gate wants
+        if: failure()
+        run: |
+          dotnet format SupercompensationApp.sln --severity error
+          echo "::group::Diff dotnet format would apply"
+          git --no-pager diff --color=always
+          echo "::endgroup::"

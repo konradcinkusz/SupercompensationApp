@@ -1,0 +1,92 @@
+# EditorConfig — https://editorconfig.org
+#
+# This file is a protected path (see ROADMAP.md section 5). The CI format job runs
+# `dotnet format --verify-no-changes` against it, so every setting here decides whether
+# every future pull request is green. Change one and you are changing the gate.
+#
+# The settings below describe the code as it is rather than as somebody would like it to
+# be: 4-space indent, spaces, LF, final newline, no trailing whitespace, file-scoped
+# namespaces. The tree was audited before this file was written and already satisfies
+# all of it, so the gate starts green and any future red is a real regression rather
+# than a backlog nobody chose.
+
+root = true
+
+# ── Every file ───────────────────────────────────────────────────────────────
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# ── Structured data and workflows ────────────────────────────────────────────
+# YAML cannot use tabs at all, and the estate's workflows are 2-space throughout.
+[*.{yml,yaml}]
+indent_size = 2
+
+# Properties/launchSettings.json is 2-space; so is every JSON emitted by the SDK.
+[*.json]
+indent_size = 2
+
+# Markdown: trailing whitespace is a hard line break in Markdown, so trimming it
+# silently changes rendered output.
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{js,css,html}]
+indent_size = 4
+
+# ── C# ───────────────────────────────────────────────────────────────────────
+[*.cs]
+indent_size = 4
+tab_width = 4
+
+# File-scoped namespaces. Models/SprintModels.cs and Services/SupercompensationService.cs
+# already use them; this records the choice rather than leaving the next file to guess.
+csharp_style_namespace_declarations = file_scoped:suggestion
+
+# Allman braces — the C# default and what the existing code does. Stated explicitly
+# because a formatter default is not a decision anybody made until it is written down.
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_new_line_before_members_in_object_initializers = true
+csharp_new_line_before_members_in_anonymous_types = true
+csharp_new_line_between_query_expression_clauses = true
+
+csharp_indent_case_contents = true
+csharp_indent_switch_labels = true
+csharp_indent_labels = one_less_than_current
+
+csharp_space_after_cast = false
+csharp_space_after_keywords_in_control_flow_statements = true
+csharp_space_between_method_declaration_parameter_list_parentheses = false
+csharp_space_between_method_call_parameter_list_parentheses = false
+csharp_space_before_colon_in_inheritance_clause = true
+csharp_space_after_colon_in_inheritance_clause = true
+csharp_space_around_binary_operators = before_and_after
+
+csharp_preserve_single_line_statements = false
+csharp_preserve_single_line_blocks = true
+
+# `using` placement is deliberately left at its default severity. Services/
+# SupercompensationService.cs puts its `using` *inside* the namespace, which is a
+# legitimate style and not something this pull request is changing; raising IDE0065 to
+# error here would fail the build on a file nobody has decided to touch.
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+
+# ── Razor ────────────────────────────────────────────────────────────────────
+# `dotnet format` does not process .razor files — it operates on Roslyn compilation
+# units and Razor markup is not one. These settings are for editors only, and the CI
+# gate does not enforce them. Said plainly so nobody later reads a green build as
+# evidence that the Razor files were checked.
+[*.razor]
+indent_size = 4
+
+# ── Project files ────────────────────────────────────────────────────────────
+[*.{csproj,props,targets}]
+indent_size = 2
