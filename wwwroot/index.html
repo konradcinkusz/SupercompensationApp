@@ -4,6 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Supercompensation Model — Agile Sprint Visualizer</title>
+    <!-- Correct for `dotnet run`, and REWRITTEN AT PUBLISH TIME by
+         .github/workflows/pages.yml, because a project page is served from
+         /SupercompensationApp/ rather than from /. Every asset path and every Blazor
+         route resolves against this, so the two must move together — the workflow greps
+         for this exact line and fails loudly if it stops matching, since the symptom
+         otherwise is a blank published page with no failed step. -->
     <base href="/" />
     <link href="css/app.css" rel="stylesheet" />
 

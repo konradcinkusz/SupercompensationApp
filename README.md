@@ -11,6 +11,13 @@ Bieżący postęp: [tracker #18](https://github.com/konradcinkusz/Supercompensat
 
 ## Uruchomienie
 
+**Wersja online:** https://konradcinkusz.github.io/SupercompensationApp/
+
+Publikowana automatycznie z gałęzi `master`. Nie wymaga instalacji .NET — wystarczy
+przeglądarka z obsługą WebAssembly i dostęp do sieci (biblioteki wykresu ładowane są z CDN).
+
+Lokalnie:
+
 ```bash
 cd SupercompensationApp
 dotnet restore
