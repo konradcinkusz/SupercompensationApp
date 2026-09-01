@@ -1,0 +1,137 @@
+name: Deploy GitHub Pages
+
+# ─────────────────────────────────────────────────────────────────────────────
+# The README's only instruction for seeing this application was `dotnet run`, which
+# limits the audience for a visualisation tool to people with a .NET 8 SDK installed.
+# That is the wrong shape for what this is: a client-only WebAssembly app with no server,
+# no database and no secrets, whose entire output is a picture. It compiles to static
+# files and can simply be hosted.
+#
+# The build job also runs on pull requests. That is deliberate: a deploy-only workflow
+# cannot be validated before it is merged, so its first real execution would be on
+# master, where a failure is already published. Building the artifact on the PR proves
+# the publish, the base-href rewrite, the SPA fallback and .nojekyll before any of it
+# matters.
+#
+# ONE-TIME MANUAL PREREQUISITE this workflow cannot do for itself:
+#   Settings -> Pages -> Source must be set to "GitHub Actions".
+# Without it actions/deploy-pages has nowhere to deploy and fails with no alternative.
+# That is not a code failure and should not consume the retry budget.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  DOTNET_VERSION: "8.0.x"
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  # A project page is served from /<repo>/, not from /. Every asset path and every Blazor
+  # route resolves against <base href>, so this is the difference between the app and a
+  # blank page.
+  BASE_HREF: "/SupercompensationApp/"
+
+jobs:
+  build:
+    name: Build Pages artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Publish
+        run: dotnet publish SupercompensationApp.csproj -c Release -o publish
+
+      # Rewritten here rather than in the committed file, so `dotnet run` keeps working
+      # locally. wwwroot/index.html carries a matching comment saying the two are linked.
+      #
+      # The grep is not decoration. If the committed <base href> is ever reformatted this
+      # sed silently matches nothing, the published app resolves every asset against the
+      # wrong root, and the symptom is a blank page with no failed step. Failing here is
+      # the whole point of the check.
+      - name: Rewrite base href for the project page
+        run: |
+          set -euo pipefail
+          index=publish/wwwroot/index.html
+          grep -q '<base href="/" />' "$index" || {
+            echo "::error::Could not find the expected <base href=\"/\" /> in $index."
+            echo "The committed index.html has changed shape; update this workflow with it."
+            exit 1
+          }
+          sed -i "s|<base href=\"/\" />|<base href=\"${BASE_HREF}\" />|" "$index"
+          grep -q "<base href=\"${BASE_HREF}\" />" "$index" || {
+            echo "::error::base href rewrite did not take effect."
+            exit 1
+          }
+          echo "base href is now: $(grep -o '<base href=\"[^\"]*\" />' "$index")"
+
+      # GitHub Pages has no SPA rewrite, so a deep link to /chart or /data — and any
+      # refresh on those routes — returns 404. A copy of index.html is the standard
+      # answer, and it MUST be made after the rewrite above or it carries the wrong base.
+      - name: Add the SPA fallback
+        run: |
+          set -euo pipefail
+          cp publish/wwwroot/index.html publish/wwwroot/404.html
+          grep -q "<base href=\"${BASE_HREF}\" />" publish/wwwroot/404.html
+
+      # Jekyll strips directories beginning with an underscore, and the Blazor runtime
+      # lives in _framework/. Without this the deploy succeeds and the app does not start.
+      - name: Disable Jekyll
+        run: touch publish/wwwroot/.nojekyll
+
+      - name: Check the artifact is actually complete
+        run: |
+          set -euo pipefail
+          for required in \
+            publish/wwwroot/index.html \
+            publish/wwwroot/404.html \
+            publish/wwwroot/.nojekyll \
+            publish/wwwroot/_framework/blazor.boot.json \
+            publish/wwwroot/js/chart-interop.js \
+            publish/wwwroot/js/storage-interop.js \
+            publish/wwwroot/css/app.css
+          do
+            test -f "$required" || { echo "::error::missing $required"; exit 1; }
+          done
+          echo "artifact contents look right:"
+          du -sh publish/wwwroot
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: publish/wwwroot
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    # Pull requests build the artifact but must not publish it.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
