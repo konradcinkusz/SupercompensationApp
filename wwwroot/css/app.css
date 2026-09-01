@@ -358,6 +358,14 @@ html, body {
 /* Shown when the chart on screen was generated from inputs the user has since edited.
    Before the state moved into a service this was silent: ResetTeam reassigned the list
    while the chart still described the previous team. */
+/* The unit qualifier on a summary stat label. Delivery value is in wydajność x dni
+   while its neighbours are instantaneous, and the card gives no other clue. */
+.stat-label em {
+    font-style: normal;
+    opacity: 0.7;
+    font-size: 0.85em;
+}
+
 .stale-notice {
     margin: 0 0 1rem 0;
     padding: 0.75rem 1rem;
