@@ -13,7 +13,8 @@ using Xunit;
 /// </summary>
 public class AppStateServiceTests
 {
-    private static AppStateService NewState() => new(new SupercompensationService());
+    private static AppStateService NewState() =>
+        new(new SupercompensationService(), new InMemoryStateStore());
 
     [Fact]
     public void ItStartsWithTheDefaultTeamAndNoResults()

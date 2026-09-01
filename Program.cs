@@ -10,6 +10,10 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 builder.Services.AddSingleton<SupercompensationService>();
 
+// Browser localStorage, behind an interface so the serialisation round-trip can be
+// tested without a browser.
+builder.Services.AddSingleton<IStateStore, LocalStorageStateStore>();
+
 // The application's state, replacing four `public static` properties that used to live
 // on Pages/Index.razor. Singleton rather than scoped: Blazor WebAssembly is single-user,
 // and scoped would behave identically here while saying something untrue about lifetime.
