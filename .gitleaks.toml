@@ -1,0 +1,39 @@
+# gitleaks configuration
+#
+# This file is a protected path (see ROADMAP.md section 5): the secret-scan workflow
+# reads it, so a change here changes what every future push is scanned for. Widening an
+# allowlist is the one edit in this repository that can make a gate quietly stop
+# gating.
+#
+# P5 of konradcinkusz/architecture-standards makes the scanner mandatory and states the
+# assumption it exists to falsify: "a repository without one is assumed to contain
+# credentials until proven otherwise".
+
+title = "SupercompensationApp secret scan"
+
+[extend]
+# The full upstream ruleset, unmodified. This repository has no reason to disable a
+# rule: it is a client-only WebAssembly page with no server, no configuration files and
+# no credentials of its own, so every default rule is either irrelevant (costing
+# nothing) or a genuine finding.
+useDefault = true
+
+# ── Allowlist ────────────────────────────────────────────────────────────────
+# Deliberately almost empty. The whole history was scanned with gitleaks 8.28.0 before
+# this file was committed and reported zero leaks, so nothing here is silencing a
+# finding — every entry below is a path the scanner has no business reading in the
+# first place.
+#
+# Add an entry only for a confirmed false positive, and say in a comment which finding
+# it suppresses and why it is not real. An allowlist entry with no such comment should
+# be treated as a defect in review.
+[allowlist]
+description = "Paths with no source of record"
+paths = [
+    # Build output. Blazor WebAssembly emits the compiled application and its runtime
+    # here; anything found in it came from a file that is itself scanned.
+    '''^bin/''',
+    '''^obj/''',
+    '''(^|/)bin/''',
+    '''(^|/)obj/''',
+]
