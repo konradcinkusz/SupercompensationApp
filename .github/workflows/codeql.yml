@@ -1,0 +1,83 @@
+name: CodeQL
+
+# ─────────────────────────────────────────────────────────────────────────────
+# REPO-BASELINE section 1 lists SAST against the failure it prevents: "static analysis
+# exists only when a human remembers to run it".
+#
+# Two languages, and the JavaScript leg is the one that would have been easy to leave
+# out. wwwroot/js/chart-interop.js is 243 lines of DOM and Blob work — including a
+# downloadCsv helper that builds an object URL and a link element out of strings
+# produced in C# — and it is checked by nothing else in this repository: `dotnet format`
+# operates on Roslyn compilation units, so neither it nor the build has ever read that
+# file.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    # Weekly. The scheduled run is not redundant with the PR runs: it is what catches a
+    # query-pack update finding something in code that has not changed. A SAST tool that
+    # only ever runs on diffs can only ever find what this week's diff introduced.
+    - cron: "27 5 * * 1"
+  workflow_dispatch: {}
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      # Writing the SARIF results back to the Security tab is the whole point; this is
+      # the one permission the job genuinely needs.
+      security-events: write
+      contents: read
+      actions: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: csharp
+            build-mode: manual
+          - language: javascript-typescript
+            build-mode: none
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        if: matrix.language == 'csharp'
+        uses: actions/setup-dotnet@v4
+        with:
+          # Kept in step with ci.yml and with SupercompensationApp.csproj's net8.0.
+          dotnet-version: "8.0.x"
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      # `manual` rather than `autobuild`, and rather than the buildless `none` mode that
+      # C# now supports. CodeQL's C# extractor observes a real compilation; a run that
+      # compiles nothing analyses nothing and reports success either way, which is the
+      # failure mode this job exists to avoid rather than to reproduce. Spelling the
+      # build out also means the job log shows it, so a green tick is checkable.
+      - name: Build
+        if: matrix.language == 'csharp'
+        run: |
+          dotnet restore SupercompensationApp.sln
+          dotnet build SupercompensationApp.sln --no-restore --configuration Release
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
