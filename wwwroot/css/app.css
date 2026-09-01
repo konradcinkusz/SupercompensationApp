@@ -355,6 +355,19 @@ html, body {
    The HTML min/max attributes on the inputs are hints only — they do not stop a value
    being typed or pasted, and @bind performs no range check — so this is where the
    reader actually finds out. */
+/* Shown when the chart on screen was generated from inputs the user has since edited.
+   Before the state moved into a service this was silent: ResetTeam reassigned the list
+   while the chart still described the previous team. */
+.stale-notice {
+    margin: 0 0 1rem 0;
+    padding: 0.75rem 1rem;
+    background: rgba(245, 158, 11, 0.12);
+    border-left: 3px solid var(--accent-amber);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
 .validation-errors {
     list-style: none;
     margin: 0 0 1rem 0;

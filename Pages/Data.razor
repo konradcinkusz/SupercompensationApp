@@ -1,4 +1,6 @@
 @page "/data"
+@implements IDisposable
+@inject AppStateService State
 @inject NavigationManager Navigation
 
 <PageTitle>Dane — Supercompensation</PageTitle>
@@ -80,7 +82,19 @@
 </div>
 
 @code {
-    private List<SprintDataPoint>? TableData => Index.LastTableData;
+    // Was `Index.LastTableData`. Data no longer depends on the Index page type.
+    private List<SprintDataPoint>? TableData => State.LastTableData;
+
+    protected override void OnInitialized()
+    {
+        State.OnChange += StateHasChanged;
+    }
+
+    public void Dispose()
+    {
+        State.OnChange -= StateHasChanged;
+    }
+
     private int SelectedSprint { get; set; } = 0;
     private string SelectedPhase { get; set; } = "";
 

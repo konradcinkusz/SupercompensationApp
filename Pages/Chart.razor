@@ -1,6 +1,7 @@
 @page "/chart"
+@implements IDisposable
 @inject IJSRuntime JS
-@inject SupercompensationService SuperService
+@inject AppStateService State
 @inject NavigationManager Navigation
 
 <PageTitle>Wykres — Supercompensation</PageTitle>
@@ -18,6 +19,14 @@
     }
     else
     {
+        @if (State.IsStale)
+        {
+            <p class="stale-notice">
+                ⚠️ Konfiguracja lub zespół zmieniły się od wygenerowania tego wykresu.
+                Wróć do konfiguracji i wygeneruj go ponownie.
+            </p>
+        }
+
         <div class="chart-controls">
             <button class="btn-toggle @(ShowPhases ? "active" : "")" @onclick="TogglePhases">
                 🎨 Pokaż fazy
@@ -64,10 +73,31 @@
 </div>
 
 @code {
-    private ChartDataSet? ChartData => Index.LastChartData;
+    // Reads the injected state. It used to be `Index.LastChartData` — a page component
+    // reaching into another page component's type for its data, which made Chart
+    // unrenderable and untestable without Index for reasons unrelated to routing.
+    private ChartDataSet? ChartData => State.LastChartData;
     private bool ShowPhases = true;
     private bool ShowBaseline = true;
     private bool _chartRendered = false;
+
+    protected override void OnInitialized()
+    {
+        State.OnChange += HandleStateChanged;
+    }
+
+    // A component that subscribes without unsubscribing leaks, and worse, re-renders a
+    // tree that has already been disposed.
+    public void Dispose()
+    {
+        State.OnChange -= HandleStateChanged;
+    }
+
+    private void HandleStateChanged()
+    {
+        _chartRendered = false;
+        StateHasChanged();
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -82,7 +112,7 @@
     {
         if (ChartData is null) return;
 
-        var config = Index.Config;
+        var config = State.Config;
         var sprintBoundaries = new List<double>();
         for (int i = 1; i < config.NumberOfSprints; i++)
             sprintBoundaries.Add(i * config.SprintDuration);
@@ -115,13 +145,13 @@
 
     private async Task ExportCsv()
     {
-        if (Index.LastTableData is null) return;
+        if (State.LastTableData is null) return;
 
         // The formatting lives in Services/CsvExporter so a unit test can reach it. It
         // used to be string interpolation here, which formats a double with the CURRENT
         // culture — and under pl-PL, which is what this app's own <html lang="pl">
         // invites, every decimal comma became an extra field separator.
-        var csv = CsvExporter.ToCsv(Index.LastTableData);
+        var csv = CsvExporter.ToCsv(State.LastTableData);
 
         await JS.InvokeVoidAsync("downloadCsv", csv, "supercompensation_data.csv");
     }
