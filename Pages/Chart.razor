@@ -62,7 +62,13 @@
                             <span class="stat-value min">@summary.MinPerformance.ToString("F1")</span>
                         </div>
                         <div class="stat">
-                            <span class="stat-label">Delivery Value</span>
+                            @* The odd one out on this card, and labelled as such. Baseline,
+                               Peak and Min are instantaneous; Delivery value is an
+                               INTEGRAL over sprint days, so it scales with sprint length
+                               while the other three do not. Three numbers side by side,
+                               two of them rates and one an accumulation, is exactly the
+                               arrangement that invites reading it as a fourth rate. *@
+                            <span class="stat-label">Delivery value <em>(wyd. × dni)</em></span>
                             <span class="stat-value dv">@summary.DeliveryValue.ToString("F2")</span>
                         </div>
                     </div>
