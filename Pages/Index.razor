@@ -169,7 +169,17 @@
         // turned out to be (#11).
         if (State.Generate())
         {
-            Navigation.NavigateTo("/chart");
+            // Relative, with NO leading slash. NavigateTo resolves a relative URI
+            // against <base href>, and a LEADING SLASH RESETS TO THE ORIGIN: under the
+            // published base /SupercompensationApp/, NavigateTo("/chart") resolves to
+            // /chart, which is outside the application and 404s.
+            //
+            // It worked under `dotnet run` only because the base there is "/", so this
+            // broke the app's primary action on the deployed site alone. The NavLinks in
+            // MainLayout were always written relative, which is why navigating by tab
+            // worked while this did not — and why nothing noticed until the browser
+            // smoke test drove the published artifact.
+            Navigation.NavigateTo("chart");
         }
     }
 }

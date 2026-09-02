@@ -188,8 +188,20 @@ await check('6  configuration survives a reload', async () => {
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForSelector('h2:has-text("Parametry Sprintu")', { timeout: BOOT_TIMEOUT });
 
-    const restored = await page.locator('.param-card input[type=number]').first().inputValue();
-    assert(restored === '14', `sprint duration came back as "${restored}" rather than "14"`);
+    // WAIT for the restored value rather than reading it once. MainLayout renders the
+    // tree before its OnInitializedAsync completes, so the first paint necessarily shows
+    // the defaults and the restored state arrives on the next render. Reading immediately
+    // is a race that reports "10 rather than 14" whether or not persistence works — which
+    // is exactly what the first run of this check did.
+    try {
+        await page.waitForFunction(
+            () => document.querySelector('.param-card input[type=number]')?.value === '14',
+            null, { timeout: 15_000 });
+    } catch {
+        const restored = await page.locator('.param-card input[type=number]').first().inputValue();
+        throw new Error(`sprint duration came back as "${restored}" rather than "14" and ` +
+            `stayed there for 15s, so this is persistence rather than a render race`);
+    }
     return 'sprint duration 14 restored from localStorage after a full reload';
 });
 
