@@ -46,7 +46,10 @@ jobs:
   build:
     name: Build Pages artifact
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Raised from 20: this job now installs Chromium and boots the WebAssembly runtime.
+    # Still bounded — a job without a timeout reports nothing when it hangs, for six
+    # hours, which is GitHub's default and not a number anybody chose.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 
@@ -111,6 +114,58 @@ jobs:
           done
           echo "artifact contents look right:"
           du -sh publish/wwwroot
+
+      # ── Browser smoke test ────────────────────────────────────────────────
+      #
+      # Runs INSIDE this job, on purpose. A separate job would have to reconstruct the
+      # artifact, and the whole value here is exercising the exact bytes that get
+      # uploaded — including the rewritten <base href>, which is the thing most likely
+      # to be wrong and the thing a re-assembly would get right by accident.
+      #
+      # It sits before the upload, so a failure blocks the artifact and therefore the
+      # deploy. Publishing an application that does not boot is worse than not
+      # publishing.
+      #
+      # Nothing else in this repository confirms the app starts: the unit tests cover
+      # the model and the services, and the check above confirms files are PRESENT,
+      # which is a different claim.
+
+      - name: Install browser test dependencies
+        working-directory: tests/e2e
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Serve the published artifact and drive it
+        run: |
+          set -euo pipefail
+
+          # Served under the published base path, not at /, so <base href> is exercised
+          # as deployed rather than bypassed.
+          node tests/e2e/serve.mjs publish/wwwroot "${BASE_HREF}" 8080 &
+          server=$!
+          trap 'kill $server 2>/dev/null || true' EXIT
+
+          for _ in $(seq 1 30); do
+            if curl -fsS -o /dev/null "http://localhost:8080${BASE_HREF}"; then
+              echo "server is up"
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS -o /dev/null "http://localhost:8080${BASE_HREF}" || {
+            echo "::error::the static server never came up"; exit 1; }
+
+          node tests/e2e/smoke.mjs "http://localhost:8080${BASE_HREF}"
+
+      # A failed browser assertion is far cheaper to read as a picture than as a stack.
+      - name: Upload the browser screenshot
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-screenshot
+          path: tests/e2e/artifacts/
+          if-no-files-found: warn
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

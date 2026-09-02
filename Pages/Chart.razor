@@ -12,7 +12,10 @@
         <div class="no-data">
             <h2>Brak danych</h2>
             <p>Najpierw skonfiguruj parametry i wygeneruj dane.</p>
-            <button class="btn-generate" @onclick="@(() => Navigation.NavigateTo("/"))">
+            @* NavigateTo("") rather than "/" — a leading slash resolves against the
+               ORIGIN rather than <base href>, so under the published base path it
+               leaves the application entirely. See Pages/Index.razor. *@
+            <button class="btn-generate" @onclick="@(() => Navigation.NavigateTo(""))">
                 ⚙️ Przejdź do konfiguracji
             </button>
         </div>

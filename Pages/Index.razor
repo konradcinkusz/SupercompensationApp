@@ -1,4 +1,5 @@
 @page "/"
+@implements IDisposable
 @inject AppStateService State
 @inject NavigationManager Navigation
 
@@ -161,6 +162,32 @@
 
     private IReadOnlyList<string> Problems => State.Problems;
 
+    // Chart and Data both subscribe to this; Index did not, and it is the page that
+    // needed it most.
+    //
+    // MainLayout restores the saved configuration in its OnInitializedAsync. That is an
+    // await on JS interop, so it completes AFTER this component has already rendered
+    // once against the defaults — which is exactly why AppStateService.LoadAsync ends by
+    // calling NotifyChanged(). On the config page that notification had no subscriber,
+    // so the restored SprintDuration sat in State.Config while the input went on showing
+    // 10. Nothing failed: no exception, no console error, and the RestoreFailed notice
+    // stayed correctly hidden because the payload had been read and accepted.
+    //
+    // Every unit test passed throughout, because the defect is not in the service, the
+    // serialiser or the store — all three do exactly what they are asked. It only exists
+    // once a component renders the state, which is why the browser smoke test is what
+    // found it.
+    protected override void OnInitialized()
+    {
+        State.OnChange += StateHasChanged;
+    }
+
+    // Subscribing without unsubscribing leaks, and re-renders a disposed tree.
+    public void Dispose()
+    {
+        State.OnChange -= StateHasChanged;
+    }
+
     private void GenerateChart()
     {
         // State.Generate() returns false rather than throwing when the configuration is
@@ -169,7 +196,17 @@
         // turned out to be (#11).
         if (State.Generate())
         {
-            Navigation.NavigateTo("/chart");
+            // Relative, with NO leading slash. NavigateTo resolves a relative URI
+            // against <base href>, and a LEADING SLASH RESETS TO THE ORIGIN: under the
+            // published base /SupercompensationApp/, NavigateTo("/chart") resolves to
+            // /chart, which is outside the application and 404s.
+            //
+            // It worked under `dotnet run` only because the base there is "/", so this
+            // broke the app's primary action on the deployed site alone. The NavLinks in
+            // MainLayout were always written relative, which is why navigating by tab
+            // worked while this did not — and why nothing noticed until the browser
+            // smoke test drove the published artifact.
+            Navigation.NavigateTo("chart");
         }
     }
 }
