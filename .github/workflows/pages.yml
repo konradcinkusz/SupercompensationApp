@@ -167,10 +167,59 @@ jobs:
           path: tests/e2e/artifacts/
           if-no-files-found: warn
 
+      # v5 rather than v3 for two reasons, and the second is the one that needs the
+      # input below.
+      #
+      # v3 bundles actions/upload-artifact@v4, which is the last Node 20 action in this
+      # repository and the only remaining source of the deprecation warning #42 set out
+      # to clear. v5 bundles v7, which is what our own upload steps use.
+      #
+      # And v4 changed the tar to be built with `--exclude=.[^/]*`, so DOTFILES ARE
+      # DROPPED unless include-hidden-files is set. publish/wwwroot contains .nojekyll,
+      # which the "Disable Jekyll" step above calls load-bearing.
+      #
+      # Strictly it is not, today: with the Pages source set to GitHub Actions the tar is
+      # served as-is and Jekyll never runs at all. But that is a fact about a setting in
+      # the repository's own web UI, changeable by anyone with admin rights and invisible
+      # from here, and if it changes then Jekyll ignores directories beginning with an
+      # underscore — the whole of _framework/ — and the application 404s with a green
+      # build. This input makes the disagreement moot rather than resolving it in favour
+      # of the weaker reading.
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: publish/wwwroot
+          include-hidden-files: true
+
+      # The exclusion above happens INSIDE the action, while it builds the tar. The
+      # artifact completeness check earlier in this job reads publish/wwwroot, so it
+      # inspects the directory and would go on passing if the tar dropped the file. The
+      # tar is the only place this claim is observable.
+      - name: Assert the dotfiles survived the tar
+        run: |
+          set -euo pipefail
+          tar="${RUNNER_TEMP}/artifact.tar"
+          test -f "$tar" || { echo "::error::no artifact tar at $tar"; exit 1; }
+
+          # Listed to a file rather than piped into grep, and that is not style.
+          # `grep -q` exits on its first match, tar then takes SIGPIPE and returns 141,
+          # and under `pipefail` the pipeline reports failure — so a PRESENT file reads
+          # as missing whenever it happens to be listed early. Measured: on a 20,000
+          # entry tar an early match gives `pipeline status=141` every time, while a
+          # match on the last entry passes, because there grep reads to the end anyway.
+          # .nojekyll is currently last in this artifact, so the piped form would have
+          # worked by accident until the ordering changed and then blocked a deploy on
+          # a perfectly good build.
+          entries="${RUNNER_TEMP}/artifact-entries.txt"
+          tar -tf "$tar" > "$entries"
+
+          if grep -qE '(^|/)\.nojekyll$' "$entries"; then
+            echo ".nojekyll is in the artifact tar ($(wc -l < "$entries") entries)"
+          else
+            echo "::error::.nojekyll is missing from the artifact tar; upload-pages-artifact excludes dotfiles unless include-hidden-files is true"
+            head -20 "$entries"
+            exit 1
+          fi
 
   deploy:
     name: Deploy to GitHub Pages
