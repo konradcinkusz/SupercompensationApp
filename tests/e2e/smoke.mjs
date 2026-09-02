@@ -176,33 +176,64 @@ await check('5  removing a member does not rebind other rows', async () => {
     return `${before.length} rows -> ${before.length - 1}, every surviving node kept its member`;
 });
 
-// ── 6. Configuration survives a reload (#14) ─────────────────────────────────
+// ── 6. Configuration survives a reload (#14) ─────────────────────────
+//
+// Deliberately TWO assertions rather than one. "The value came back as 10" is
+// ambiguous between a write that never happened and a payload that was written and
+// then rejected on load, and those have nothing in common but the symptom. Checking
+// the stored payload before reloading splits them, and each half names itself.
 await check('6  configuration survives a reload', async () => {
+    const KEY = 'supercompensation.state.v1';
+
+    // Clear first, so whatever is in storage after the edit was put there BY the edit.
+    // Check 5's removal also writes, and without this a stale payload from it would
+    // make a broken debounce look like a working one.
+    await page.evaluate((k) => localStorage.removeItem(k), KEY);
+
     const duration = page.locator('.param-card input[type=number]').first();
     await duration.fill('14');
     await duration.blur();
-    // The debounce in AppStateService is 400ms; give it room without being generous
-    // enough to hide a broken write.
-    await page.waitForTimeout(1500);
 
+    // ── half one: the write ──
+    // Polled rather than slept. A fixed sleep is either flaky or long enough to hide
+    // how much of the budget the debounce actually used.
+    let stored;
+    try {
+        stored = await page
+            .waitForFunction((k) => localStorage.getItem(k), KEY, { timeout: 10_000 })
+            .then((h) => h.jsonValue());
+    } catch {
+        throw new Error(
+            `nothing reached localStorage["${KEY}"] in the 10s after the edit, against a ` +
+            `400ms debounce — the SAVE half is broken, not the restore half`);
+    }
+    assert(/"SprintDuration":\s*14\b/.test(stored),
+        `the stored payload does not carry the edit: ${stored.slice(0, 300)}`);
+
+    // ── half two: the restore ──
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForSelector('h2:has-text("Parametry Sprintu")', { timeout: BOOT_TIMEOUT });
 
     // WAIT for the restored value rather than reading it once. MainLayout renders the
     // tree before its OnInitializedAsync completes, so the first paint necessarily shows
-    // the defaults and the restored state arrives on the next render. Reading immediately
-    // is a race that reports "10 rather than 14" whether or not persistence works — which
-    // is exactly what the first run of this check did.
+    // the defaults and the restored state arrives on a later render.
     try {
         await page.waitForFunction(
             () => document.querySelector('.param-card input[type=number]')?.value === '14',
             null, { timeout: 15_000 });
     } catch {
-        const restored = await page.locator('.param-card input[type=number]').first().inputValue();
-        throw new Error(`sprint duration came back as "${restored}" rather than "14" and ` +
-            `stayed there for 15s, so this is persistence rather than a render race`);
+        // Report everything that distinguishes the remaining causes from one another,
+        // because a second run costs a full publish.
+        const shown = await duration.inputValue();
+        const rejected = await page.locator('.stale-notice').count();
+        const survived = await page.evaluate((k) => localStorage.getItem(k), KEY);
+        throw new Error(
+            `written but not restored: the input shows "${shown}" after 15s; the ` +
+            `RestoreFailed notice is ${rejected ? 'PRESENT, so TryDeserialize rejected the ' +
+            'payload' : 'ABSENT, so the read returned null or the value never reached the ' +
+            'DOM'}; storage now holds ${survived ? survived.slice(0, 200) : 'NOTHING'}`);
     }
-    return 'sprint duration 14 restored from localStorage after a full reload';
+    return 'sprint duration 14 written to localStorage and restored after a full reload';
 });
 
 // ── 7. Deep links and the SPA fallback (#15) ─────────────────────────────────
