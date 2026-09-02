@@ -227,11 +227,22 @@ await check('6  configuration survives a reload', async () => {
         const shown = await duration.inputValue();
         const rejected = await page.locator('.stale-notice').count();
         const survived = await page.evaluate((k) => localStorage.getItem(k), KEY);
+        // Read it back through the application's OWN helper, which is the function
+        // LocalStorageStateStore invokes. That store catches JSException and returns
+        // null, so a missing or throwing helper is indistinguishable from a first visit
+        // on the .NET side — this is the only place the difference is visible.
+        const viaApp = await page.evaluate((k) => {
+            if (typeof window.supercompStorage?.read !== 'function') {
+                return '<<window.supercompStorage.read is not a function>>';
+            }
+            try { return window.supercompStorage.read(k); } catch (e) { return `<<threw ${e}>>`; }
+        }, KEY);
         throw new Error(
             `written but not restored: the input shows "${shown}" after 15s; the ` +
             `RestoreFailed notice is ${rejected ? 'PRESENT, so TryDeserialize rejected the ' +
-            'payload' : 'ABSENT, so the read returned null or the value never reached the ' +
-            'DOM'}; storage now holds ${survived ? survived.slice(0, 200) : 'NOTHING'}`);
+            'payload' : 'ABSENT, so the read succeeded or returned null'}; ` +
+            `storage holds ${survived ? survived.slice(0, 120) : 'NOTHING'}; ` +
+            `the app's own reader returns ${viaApp ? String(viaApp).slice(0, 120) : 'null'}`);
     }
     return 'sprint duration 14 written to localStorage and restored after a full reload';
 });
