@@ -173,7 +173,66 @@ await check('5  removing a member does not rebind other rows', async () => {
     assert(drift.length === 0,
         `${drift.length} surviving row(s) now show a different member than the DOM node ` +
         `they belong to: ${JSON.stringify(drift)}`);
-    return `${before.length} rows -> ${before.length - 1}, every surviving node kept its member`;
+
+    // ── the mid-edit removal from #13's own description ──
+    //
+    // The VALUES are not the observable here, and that is worth writing down because
+    // #43's acceptance criterion assumed they were ("assert no member's name has
+    // changed"). Blur fires before click, so a pending edit commits to the correct
+    // member before the removal is processed, and a positional re-render then writes a
+    // correct model back over the rows: measured against a fixture, keyed and unkeyed
+    // end with byte-identical text, so an assertion on the names passes in both and is
+    // therefore not a check at all.
+    //
+    // What differs is the DOM NODE. With @key the node travels with its member and
+    // survives a removal elsewhere; without it the renderer keeps the nodes where they
+    // are and destroys the LAST one — which is the node being typed into. That is where
+    // caret position, native validation state and an open <select> live, and it is what
+    // the @key comment in Index.razor says the fix is for. Measured on the same fixture:
+    // node survives with @key, destroyed without.
+    const TYPED = 'Edited mid-flight';
+    const remaining = await page.locator('.team-table tbody tr').count();
+    const edited = page.locator('.team-table tbody tr').nth(remaining - 1).locator('input[type=text]');
+
+    // pressSequentially, never fill(): fill dispatches `change` itself, so the value is
+    // already committed and there is no pending edit left to lose.
+    await edited.click();
+    await edited.press('ControlOrMeta+a');
+    await edited.pressSequentially(TYPED, { delay: 5 });
+    assert(await edited.inputValue() === TYPED, 'the typed value never reached the field');
+
+    // Hold the exact node, then remove a DIFFERENT row. Deliberately no blur: the click
+    // is what blurs it, which is the whole of the scenario.
+    // activeElement rather than the locator's node, because what is at stake is the
+    // element holding the CARET. Guarded, though: if focus were ever on <body> the
+    // isConnected assertion below would be trivially true and could not fail.
+    const stashed = await page.evaluate(() => {
+        window.__editedNode = document.activeElement;
+        const el = window.__editedNode;
+        return el ? `${el.tagName}:${el.getAttribute('type') || ''}` : 'null';
+    });
+    assert(stashed === 'INPUT:text',
+        `expected the caret to be in the edited name field, but focus was on ${stashed} — ` +
+        `the survival assertion below would be vacuous`);
+
+    await page.locator('.team-table tbody tr').nth(0).locator('.btn-remove').click();
+    await page.waitForFunction(
+        (n) => document.querySelectorAll('.team-table tbody tr').length === n - 1,
+        remaining, { timeout: 15_000 });
+
+    const survived = await page.evaluate(() => ({
+        connected: window.__editedNode.isConnected,
+        value: window.__editedNode.value,
+    }));
+    assert(survived.connected,
+        `the row being edited was destroyed by removing a different row — without @key ` +
+        `the renderer keeps the nodes in place and drops the last one, taking the caret ` +
+        `and any uncommitted native state with it (the node still held "${survived.value}")`);
+    assert(survived.value === TYPED,
+        `the edited node survived but now shows "${survived.value}" rather than "${TYPED}"`);
+
+    return `${before.length} rows -> ${before.length - 1}, every surviving node kept its ` +
+        `member; a row edited mid-flight survived a removal elsewhere`;
 });
 
 // ── 6. Configuration survives a reload (#14) ─────────────────────────
