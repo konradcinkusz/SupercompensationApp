@@ -85,6 +85,7 @@ untested command is the same defect as a committed-but-never-executed config.
 | **CI / Format check** | `dotnet format SupercompensationApp.sln --verify-no-changes --severity error` |
 | **Secret scan / gitleaks** | `docker run --rm -v "$PWD:/repo" -w /repo zricethezav/gitleaks:v8.28.0 git /repo --config=/repo/.gitleaks.toml --redact --no-banner --verbose` |
 | **Deploy GitHub Pages / Build** | `dotnet publish SupercompensationApp.csproj -c Release -o publish` |
+| **Deploy GitHub Pages / browser smoke test** | `tests/e2e/run-local.sh` — publishes, rewrites the base href, serves the artifact and drives it in Chromium. Read the note below before acting on a failure. |
 | **CodeQL** | Not reproducible locally without the CodeQL CLI; it runs on every pull request. |
 
 ### If the format check fails
@@ -112,6 +113,36 @@ CI red the other way.
 So when the check fails locally, first run it on a clean tree. If the same files complain
 there, it is your SDK and not your change, and the fix is to leave them alone — CI is the
 authority, because CI is what gates the merge.
+
+### The browser smoke test, and the three checks that need the network
+
+`tests/e2e/run-local.sh` runs the same seven checks CI does, against a real publish served
+under the real base path. It mirrors the `build` job in `pages.yml` and is deliberately not a
+second source of truth: if the two disagree, the workflow is right, because the workflow gates
+the merge.
+
+It is worth running before pushing anything that touches a component, a route, the CDN script
+tags or `wwwroot/`. It is the check that has found the most defects here — an unreadable chart
+title, phase bands misplaced by a factor of five, a Generate button that navigated out of the
+application on the deployed site, a restored configuration that never reached the input, and
+SRI hashes that had never once been served to a browser — and none of the others could see
+any of them.
+
+**Checks 2, 3 and 4 need `cdn.jsdelivr.net`.** They are what exercises Chart.js and the
+integrity hashes, so they cannot be made offline without giving up the only thing that proves
+those hashes are right. Behind a proxy that cannot reach it you get:
+
+```
+FAIL  2  the chart renders
+         window.Chart is undefined — the CDN script did not execute.
+...
+4/7 checks passed
+Failed: 2, 3, 4
+```
+
+with `net::ERR_TUNNEL_CONNECTION_FAILED` in the console list. **That is the network, not the
+application.** Checks 1, 5, 6 and 7 need nothing external, so `4/7` with exactly that failure
+set is the healthy offline result; anything else is worth reading properly.
 
 **Two things `dotnet format` does not cover**, so a green format check is not a claim
 about them: it operates on Roslyn compilation units, so the `.razor` files and
