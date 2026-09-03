@@ -45,6 +45,7 @@ Tests live in `tests/SupercompensationApp.Tests/`. What is there and why:
 | `CsvExporterTests` | the export is byte-identical under `pl-PL`, `de-DE` and `en-US` |
 | `AppStateServiceTests` | state, staleness, team membership, change notification |
 | `StatePersistenceTests` | the storage round trip and every fail-soft path |
+| `PageComponentTests` | the four `.razor` components: the restore reaching the input, every page re-rendering on `OnChange`, navigation resolving against `<base href>`, and the two `disabled` guards |
 
 Two conventions in these tests, both load-bearing:
 
@@ -56,6 +57,16 @@ Two conventions in these tests, both load-bearing:
   asserts `pl-PL` really does format a decimal with a comma — because without ICU,
   `new CultureInfo("pl-PL")` silently yields invariant behaviour and every other test in
   that file would pass while never exercising a second culture.
+
+  The same rule shapes `PageComponentTests`. Its navigation test supplies a
+  `NavigationManager` whose base URI carries a **path**, because under `http://localhost/`
+  the correct `NavigateTo("chart")` and the defect `NavigateTo("/chart")` resolve to the
+  same URI — a test against the default base passes either way and proves nothing. Every
+  test in that file was confirmed red by re-introducing the defect it guards.
+- **Test the component, not only the service.** The two defects the browser test found in
+  #45 both lived in a `.razor` file while the services beneath them were correct, so all 48
+  service tests passed throughout. `AppStateService` raises `OnChange` so that pages learn
+  about a restore; whether a given page *subscribes* is a fact about the page.
 
 ## Reproducing CI locally
 
@@ -90,10 +101,23 @@ git diff
 CI does exactly this in an `if: failure()` step, so a red run already carries the diff it
 wants — check the log before reproducing it.
 
+**Check whose formatter is complaining before you apply anything.** `dotnet format` is part
+of the SDK, and different SDK feature bands format differently. On an Ubuntu-packaged
+`dotnet-sdk-8.0` (8.0.130 at the time of writing) this command reports 18 `WHITESPACE`
+errors in `Services/CsvExporter.cs` and `CsvExporterTests.cs` **on a clean checkout of
+`master`**, while the same command is green in CI, which resolves `8.0.x` to a different
+band. Applying those and committing them would reformat two files nobody touched and turn
+CI red the other way.
+
+So when the check fails locally, first run it on a clean tree. If the same files complain
+there, it is your SDK and not your change, and the fix is to leave them alone — CI is the
+authority, because CI is what gates the merge.
+
 **Two things `dotnet format` does not cover**, so a green format check is not a claim
 about them: it operates on Roslyn compilation units, so the `.razor` files and
-`wwwroot/js/*.js` are untouched by it. The JavaScript is analysed by CodeQL; the Razor is
-reviewed by people.
+`wwwroot/js/*.js` are untouched by it. The JavaScript is analysed by CodeQL and driven by
+the browser test; the Razor is *tested* by `PageComponentTests` and driven by the browser
+test, but its formatting is reviewed by people.
 
 ## Protected paths
 
